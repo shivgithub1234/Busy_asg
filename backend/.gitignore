@@ -1,2 +1,56 @@
+# Dependencies
+node_modules/
+
+# Environment variables
 .env
-node_modules
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+out/
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing / coverage
+coverage/
+.nyc_output/
+
+# Runtime files
+*.pid
+*.seed
+*.pid.lock
+
+# IDE / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+
+# Local configuration
+*.local
+
+# Optional: generated API/documentation files
+.openapi/

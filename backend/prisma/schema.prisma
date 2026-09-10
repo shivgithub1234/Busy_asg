@@ -1,0 +1,133 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ORGANIZER
+  STAFF
+}
+
+enum RegistrationStatus {
+  RESERVED
+  CONFIRMED
+  CHECKED_IN
+  EXPIRED
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  staffAssignments    StaffAssignment[]
+  registrationEvents  RegistrationEvent[]
+  alertDismissals     AlertDismissal[]
+
+  @@map("users")
+}
+
+model Event {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  startDate   DateTime @map("start_date") @db.Date
+  endDate     DateTime @map("end_date") @db.Date
+  venue       String
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  sessions Session[]
+
+  @@map("events")
+}
+
+model Session {
+  id                String   @id @default(uuid())
+  eventId           String   @map("event_id")
+  title             String
+  startTime         DateTime @map("start_time")
+  durationMinutes   Int      @map("duration_minutes")
+  location          String
+  capacity          Int
+  capacityFillEpoch Int      @default(0) @map("capacity_fill_epoch")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  event            Event            @relation(fields: [eventId], references: [id])
+  registrations    Registration[]
+  staffAssignments StaffAssignment[]
+  alertDismissals  AlertDismissal[]
+
+  @@map("sessions")
+}
+
+model StaffAssignment {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  sessionId String   @map("session_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id])
+  session Session @relation(fields: [sessionId], references: [id])
+
+  @@unique([userId, sessionId])
+  @@map("staff_assignments")
+}
+
+model Registration {
+  id             String             @id @default(uuid())
+  sessionId      String             @map("session_id")
+  attendeeName   String             @map("attendee_name")
+  attendeeEmail  String             @map("attendee_email")
+  status         RegistrationStatus
+  reservedAt     DateTime           @map("reserved_at")
+  expiresAt      DateTime?          @map("expires_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  session            Session             @relation(fields: [sessionId], references: [id])
+  registrationEvents RegistrationEvent[]
+
+  @@index([sessionId, status])
+  @@index([attendeeEmail])
+  @@map("registrations")
+}
+
+model RegistrationEvent {
+  id             String              @id @default(uuid())
+  registrationId String              @map("registration_id")
+  oldStatus      RegistrationStatus? @map("old_status")
+  newStatus      RegistrationStatus  @map("new_status")
+  changedBy      String?             @map("changed_by")
+  note           String?
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  registration Registration @relation(fields: [registrationId], references: [id])
+  user         User?        @relation(fields: [changedBy], references: [id])
+
+  @@map("registration_events")
+}
+
+model AlertDismissal {
+  id          String   @id @default(uuid())
+  sessionId   String   @map("session_id")
+  fillEpoch   Int      @map("fill_epoch")
+  dismissedBy String   @map("dismissed_by")
+  dismissedAt DateTime @default(now()) @map("dismissed_at")
+
+  session Session @relation(fields: [sessionId], references: [id])
+  user    User    @relation(fields: [dismissedBy], references: [id])
+
+  @@unique([sessionId, fillEpoch])
+  @@map("alert_dismissals")
+}

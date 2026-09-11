@@ -53,20 +53,17 @@ export async function importCSV(req: Request, res: Response): Promise<void> {
 
     const { attendee_name, attendee_email } = parsed.data;
 
-    const duplicate = await prisma.registration.findFirst({
-      where: { sessionId, attendeeEmail: attendee_email, status: { in: [...ACTIVE_STATUSES] } },
-    });
-    if (duplicate) {
-      report.push({ row: rowNum, status: "duplicate", reason: `${attendee_email} already has an active registration` });
-      continue;
-    }
-
     try {
       const reg = await prisma.$transaction(async (tx) => {
         const rows = await tx.$queryRaw<Array<{ capacity: number; capacity_fill_epoch: number }>>`
           SELECT capacity, capacity_fill_epoch FROM sessions WHERE id = ${sessionId} FOR UPDATE
         `;
         const { capacity, capacity_fill_epoch } = rows[0];
+
+        const existingReg = await tx.registration.findFirst({
+          where: { sessionId, attendeeEmail: attendee_email, status: { in: [...ACTIVE_STATUSES] } },
+        });
+        if (existingReg) throw new Error("DUPLICATE");
 
         const activeCount = await tx.registration.count({
           where: { sessionId, status: { in: [...ACTIVE_STATUSES] } },
@@ -102,11 +99,15 @@ export async function importCSV(req: Request, res: Response): Promise<void> {
       created++;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "";
-      report.push({
-        row: rowNum,
-        status: "rejected",
-        reason: msg === "SESSION_FULL" ? "Session at capacity" : "Unexpected error",
-      });
+      if (msg === "DUPLICATE") {
+        report.push({ row: rowNum, status: "duplicate", reason: `${attendee_email} already has an active registration` });
+      } else {
+        report.push({
+          row: rowNum,
+          status: "rejected",
+          reason: msg === "SESSION_FULL" ? "Session at capacity" : "Unexpected error",
+        });
+      }
     }
   }
 

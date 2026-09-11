@@ -4,6 +4,15 @@ import jwt from "jsonwebtoken";
 import { z } from "zod";
 import prisma from "../lib/prisma";
 
+function isPrismaUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: string }).code === "P2002"
+  );
+}
+
 const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -35,12 +44,21 @@ export async function signup(req: Request, res: Response): Promise<void> {
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
-  const user = await prisma.user.create({
-    data: { email, passwordHash, role },
-    select: { id: true, email: true, role: true, createdAt: true },
-  });
-
-  res.status(201).json({ token: signToken(user.id, user.role), user });
+  try {
+    const user = await prisma.user.create({
+      data: { email, passwordHash, role },
+      select: { id: true, email: true, role: true, createdAt: true },
+    });
+    res.status(201).json({ token: signToken(user.id, user.role), user });
+  } catch (err: unknown) {
+    if (isPrismaUniqueViolation(err)) {
+      // Catches the race where two concurrent signups with the same email
+      // both pass the findUnique check then collide on the DB unique index.
+      res.status(409).json({ error: "Email already registered" });
+      return;
+    }
+    throw err;
+  }
 }
 
 export async function login(req: Request, res: Response): Promise<void> {

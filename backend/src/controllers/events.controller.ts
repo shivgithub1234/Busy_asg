@@ -2,6 +2,15 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import prisma from "../lib/prisma";
 
+function isPrismaUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: string }).code === "P2002"
+  );
+}
+
 const eventSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
@@ -73,10 +82,18 @@ export async function createEvent(req: Request, res: Response): Promise<void> {
     return;
   }
   const { name, description, startDate, endDate, venue } = parsed.data;
-  const event = await prisma.event.create({
-    data: { name, description, startDate: new Date(startDate), endDate: new Date(endDate), venue },
-  });
-  res.status(201).json(event);
+  try {
+    const event = await prisma.event.create({
+      data: { name, description, startDate: new Date(startDate), endDate: new Date(endDate), venue },
+    });
+    res.status(201).json(event);
+  } catch (err: unknown) {
+    if (isPrismaUniqueViolation(err)) {
+      res.status(409).json({ error: "An event with this name, start date, and venue already exists" });
+      return;
+    }
+    throw err;
+  }
 }
 
 export async function updateEvent(req: Request, res: Response): Promise<void> {
@@ -156,10 +173,18 @@ export async function createSession(req: Request, res: Response): Promise<void> 
     return;
   }
   const { title, startTime, durationMinutes, location, capacity } = parsed.data;
-  const session = await prisma.session.create({
-    data: { eventId: req.params.eventId, title, startTime: new Date(startTime), durationMinutes, location, capacity },
-  });
-  res.status(201).json(session);
+  try {
+    const session = await prisma.session.create({
+      data: { eventId: req.params.eventId, title, startTime: new Date(startTime), durationMinutes, location, capacity },
+    });
+    res.status(201).json(session);
+  } catch (err: unknown) {
+    if (isPrismaUniqueViolation(err)) {
+      res.status(409).json({ error: "A session with this title and start time already exists for this event" });
+      return;
+    }
+    throw err;
+  }
 }
 
 export async function updateSession(req: Request, res: Response): Promise<void> {

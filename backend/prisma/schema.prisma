@@ -48,6 +48,7 @@ model Event {
 
   sessions Session[]
 
+  @@unique([name, startDate, venue])
   @@map("events")
 }
 
@@ -68,6 +69,7 @@ model Session {
   staffAssignments StaffAssignment[]
   alertDismissals  AlertDismissal[]
 
+  @@unique([eventId, title, startTime])
   @@map("sessions")
 }
 

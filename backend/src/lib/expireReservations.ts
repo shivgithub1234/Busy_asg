@@ -12,6 +12,11 @@ export async function expireReservations(): Promise<{ expired: number }> {
 
   await prisma.$transaction(async (tx) => {
     for (const reg of stale) {
+      const locked = await tx.$queryRaw<Array<{ status: string }>>`
+        SELECT status FROM registrations WHERE id = ${reg.id} FOR UPDATE
+      `;
+      if (!locked.length || locked[0].status !== "RESERVED") continue;
+
       await tx.registration.update({
         where: { id: reg.id },
         data: { status: "EXPIRED", expiresAt: null },

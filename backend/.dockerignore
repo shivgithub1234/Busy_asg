@@ -1,0 +1,17 @@
+# Build artefacts
+dist/
+node_modules/
+
+# Local env files – secrets are set via Render's environment variables
+.env
+.env.*
+
+# Dev / editor noise
+*.log
+.DS_Store
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore

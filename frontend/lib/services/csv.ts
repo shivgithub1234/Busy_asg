@@ -26,7 +26,14 @@ export const csvService = {
     return api.post<ImportResult>(
       `/api/sessions/${sessionId}/registrations/import`,
       form,
-      { headers: { "Content-Type": "multipart/form-data" } }
+      {
+        headers: {
+          // Let the browser set Content-Type with the correct multipart boundary.
+          // Explicitly deleting the instance default prevents axios from locking
+          // it to application/json, which breaks multer's file parsing.
+          "Content-Type": undefined,
+        },
+      }
     );
   },
 

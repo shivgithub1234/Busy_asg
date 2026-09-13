@@ -17,18 +17,25 @@ import { expireReservations } from "./lib/expireReservations";
 const app = express();
 const PORT = process.env.PORT ?? 4000;
 
-const allowedOrigins = ["http://localhost:3000", process.env.FRONTEND_URL].filter(Boolean) as string[];
+const allowedOrigins = [
+  "http://localhost:3000",
+  process.env.FRONTEND_URL,
+].filter(Boolean) as string[];
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      callback(new Error(`CORS: origin ${origin} not allowed`));
-    },
-    credentials: true,
-  })
-);
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    // Allow server-to-server / curl requests (no Origin header)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Reject — return false, never throw (throwing causes a 500 on preflight)
+    return callback(null, false);
+  },
+  credentials: true,
+};
+
+// Apply CORS to all routes, including OPTIONS preflight
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 app.use(express.json());
 

@@ -1,56 +1,54 @@
+# ── Stage 1: deps ──────────────────────────────────────────────────────────────
 FROM node:20-alpine AS deps
 
 WORKDIR /app
 
-# Copy manifests first to leverage layer caching
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 
-# Install ALL deps (dev needed for tsc / prisma generate)
 RUN npm ci
 
-# Generate the Prisma client
 RUN npx prisma generate
 
+# ── Stage 2: builder ───────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Bring in node_modules + generated Prisma client from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/prisma ./prisma
 
-# Copy source
 COPY tsconfig.json ./
 COPY src ./src
 
-# Compile TypeScript → dist/
 RUN npx tsc --project tsconfig.json
 
+# ── Stage 3: runner ────────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner
 
-# Non-root user for security
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# OpenSSL is required by the Prisma query engine on Alpine
+RUN apk add --no-cache openssl
 
 WORKDIR /app
 
-# Only copy what's needed at runtime
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 
-# Install production dependencies only
+# Install prod deps and generate Prisma client while still root
+# so the engine binaries can be written to node_modules
 RUN npm ci --omit=dev && npx prisma generate
 
-# Copy compiled output
 COPY --from=builder /app/dist ./dist
 
-# Render injects PORT automatically; default to 4000 for local runs
+# Switch to non-root user only after all writes to node_modules are done
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
+    && chown -R appuser:appgroup /app
+
+USER appuser
+
 ENV NODE_ENV=production
 ENV PORT=4000
 EXPOSE 4000
 
-USER appuser
-
-# Run migrations then start the server.
-# prisma migrate deploy is safe to run on every boot (idempotent).
+# prisma migrate deploy is idempotent — safe to run on every boot
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
